@@ -1,16 +1,3 @@
 name: uptime-app
 replicas: 3
 public: true
-instance_type: t2.small
-containers:
-  nginx:
-    image: nginx:alpine
-    ports:
-      - http:8080:http:80
-    resources:
-      limits:
-      memory: "128Mi"
-      cpu: "100"
-      requests:
-        memory: "64Mi"
-        cpu: "100m"
