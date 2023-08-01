@@ -1,4 +1,4 @@
 name: uptime-app
 deploy:
   - name: install
-    command: ./install.sh
+    command: "chmod +x ./install.sh && ./install.sh"
