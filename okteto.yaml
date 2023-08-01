@@ -1,1 +1,4 @@
 name: uptime-app
+deploy:
+  - name: install
+    command: ./install.sh
