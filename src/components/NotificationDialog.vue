@@ -126,6 +126,7 @@ export default {
                 "lunasea": "LunaSea",
                 "matrix": "Matrix",
                 "mattermost": "Mattermost",
+                "nostr": "Nostr",
                 "ntfy": "Ntfy",
                 "octopush": "Octopush",
                 "OneBot": "OneBot",
@@ -157,6 +158,7 @@ export default {
                 "AliyunSMS": "AliyunSMS (阿里云短信服务)",
                 "DingDing": "DingDing (钉钉自定义机器人)",
                 "Feishu": "Feishu (飞书)",
+                "FlashDuty": "FlashDuty (快猫星云)",
                 "FreeMobile": "FreeMobile (mobile.free.fr)",
                 "PushDeer": "PushDeer",
                 "promosms": "PromoSMS",
@@ -164,6 +166,7 @@ export default {
                 "SMSManager": "SmsManager (smsmanager.cz)",
                 "WeCom": "WeCom (企业微信群机器人)",
                 "ServerChan": "ServerChan (Server酱)",
+                "smsc": "SMSC",
             };
 
             // Sort by notification name

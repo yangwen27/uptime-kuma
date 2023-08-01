@@ -1,36 +1,81 @@
 <template>
     <div class="shadow-box mb-3" :style="boxStyle">
         <div class="list-header">
-            <div class="placeholder"></div>
-            <div class="search-wrapper">
-                <a v-if="searchText == ''" class="search-icon">
-                    <font-awesome-icon icon="search" />
-                </a>
-                <a v-if="searchText != ''" class="search-icon" @click="clearSearchText">
-                    <font-awesome-icon icon="times" />
-                </a>
-                <form>
-                    <input v-model="searchText" class="form-control search-input" :placeholder="$t('Search...')" autocomplete="off" />
-                </form>
+            <div class="header-top">
+                <button class="btn btn-outline-normal ms-2" :class="{ 'active': selectMode }" type="button" @click="selectMode = !selectMode">
+                    {{ $t("Select") }}
+                </button>
+
+                <div class="placeholder"></div>
+                <div class="search-wrapper">
+                    <a v-if="searchText == ''" class="search-icon">
+                        <font-awesome-icon icon="search" />
+                    </a>
+                    <a v-if="searchText != ''" class="search-icon" @click="clearSearchText">
+                        <font-awesome-icon icon="times" />
+                    </a>
+                    <form>
+                        <input
+                            v-model="searchText" class="form-control search-input" :placeholder="$t('Search...')"
+                            autocomplete="off"
+                        />
+                    </form>
+                </div>
+            </div>
+            <div class="header-filter">
+                <MonitorListFilter :filterState="filterState" @update-filter="updateFilter" />
+            </div>
+
+            <!-- Selection Controls -->
+            <div v-if="selectMode" class="selection-controls px-2 pt-2">
+                <input
+                    v-model="selectAll"
+                    class="form-check-input select-input"
+                    type="checkbox"
+                />
+
+                <button class="btn-outline-normal" @click="pauseDialog"><font-awesome-icon icon="pause" size="sm" /> {{ $t("Pause") }}</button>
+                <button class="btn-outline-normal" @click="resumeSelected"><font-awesome-icon icon="play" size="sm" /> {{ $t("Resume") }}</button>
+
+                <span v-if="selectedMonitorCount > 0">
+                    {{ $t("selectedMonitorCount", [ selectedMonitorCount ]) }}
+                </span>
             </div>
         </div>
-        <div class="monitor-list" :class="{ scrollbar: scrollbar }">
+        <div ref="monitorList" class="monitor-list" :class="{ scrollbar: scrollbar }" :style="monitorListStyle">
             <div v-if="Object.keys($root.monitorList).length === 0" class="text-center mt-3">
                 {{ $t("No Monitors, please") }} <router-link to="/add">{{ $t("add one") }}</router-link>
             </div>
 
-            <MonitorListItem v-for="(item, index) in sortedMonitorList" :key="index" :monitor="item" :isSearch="searchText !== ''" />
+            <MonitorListItem
+                v-for="(item, index) in sortedMonitorList"
+                :key="index"
+                :monitor="item"
+                :isSearch="searchText !== ''"
+                :isSelectMode="selectMode"
+                :isSelected="isSelected"
+                :select="select"
+                :deselect="deselect"
+            />
         </div>
     </div>
+
+    <Confirm ref="confirmPause" :yes-text="$t('Yes')" :no-text="$t('No')" @yes="pauseSelected">
+        {{ $t("pauseMonitorMsg") }}
+    </Confirm>
 </template>
 
 <script>
+import Confirm from "../components/Confirm.vue";
 import MonitorListItem from "../components/MonitorListItem.vue";
+import MonitorListFilter from "./MonitorListFilter.vue";
 import { getMonitorRelativeURL } from "../util.ts";
 
 export default {
     components: {
+        Confirm,
         MonitorListItem,
+        MonitorListFilter,
     },
     props: {
         /** Should the scrollbar be shown */
@@ -41,7 +86,16 @@ export default {
     data() {
         return {
             searchText: "",
+            selectMode: false,
+            selectAll: false,
+            disableSelectAllWatcher: false,
+            selectedMonitors: {},
             windowTop: 0,
+            filterState: {
+                status: null,
+                active: null,
+                tags: null,
+            }
         };
     },
     computed: {
@@ -72,8 +126,8 @@ export default {
                 const loweredSearchText = this.searchText.toLowerCase();
                 result = result.filter(monitor => {
                     return monitor.name.toLowerCase().includes(loweredSearchText)
-                    || monitor.tags.find(tag => tag.name.toLowerCase().includes(loweredSearchText)
-                    || tag.value?.toLowerCase().includes(loweredSearchText));
+                        || monitor.tags.find(tag => tag.name.toLowerCase().includes(loweredSearchText)
+                            || tag.value?.toLowerCase().includes(loweredSearchText));
                 });
             } else {
                 result = result.filter(monitor => monitor.parent === null);
@@ -105,8 +159,81 @@ export default {
                 return m1.name.localeCompare(m2.name);
             });
 
+            if (this.filterState.status != null && this.filterState.status.length > 0) {
+                result.map(monitor => {
+                    if (monitor.id in this.$root.lastHeartbeatList && this.$root.lastHeartbeatList[monitor.id]) {
+                        monitor.status = this.$root.lastHeartbeatList[monitor.id].status;
+                    }
+                });
+                result = result.filter(monitor => this.filterState.status.includes(monitor.status));
+            }
+
+            if (this.filterState.active != null && this.filterState.active.length > 0) {
+                result = result.filter(monitor => this.filterState.active.includes(monitor.active));
+            }
+
+            if (this.filterState.tags != null && this.filterState.tags.length > 0) {
+                result = result.filter(monitor => {
+                    return monitor.tags.map(tag => tag.tag_id) // convert to array of tag IDs
+                        .filter(monitorTagId => this.filterState.tags.includes(monitorTagId)) // perform Array Intersaction between filter and monitor's tags
+                        .length > 0;
+                });
+            }
+
             return result;
         },
+
+        isDarkTheme() {
+            return document.body.classList.contains("dark");
+        },
+
+        monitorListStyle() {
+            let listHeaderHeight = 107;
+
+            if (this.selectMode) {
+                listHeaderHeight += 42;
+            }
+
+            return {
+                "height": `calc(100% - ${listHeaderHeight}px)`
+            };
+        },
+
+        selectedMonitorCount() {
+            return Object.keys(this.selectedMonitors).length;
+        },
+    },
+    watch: {
+        searchText() {
+            for (let monitor of this.sortedMonitorList) {
+                if (!this.selectedMonitors[monitor.id]) {
+                    if (this.selectAll) {
+                        this.disableSelectAllWatcher = true;
+                        this.selectAll = false;
+                    }
+                    break;
+                }
+            }
+        },
+        selectAll() {
+            if (!this.disableSelectAllWatcher) {
+                this.selectedMonitors = {};
+
+                if (this.selectAll) {
+                    this.sortedMonitorList.forEach((item) => {
+                        this.selectedMonitors[item.id] = true;
+                    });
+                }
+            } else {
+                this.disableSelectAllWatcher = false;
+            }
+        },
+        selectMode() {
+            if (!this.selectMode) {
+                this.selectAll = false;
+                this.selectedMonitors = {};
+            }
+        }
     },
     mounted() {
         window.addEventListener("scroll", this.onScroll);
@@ -134,7 +261,61 @@ export default {
         /** Clear the search bar */
         clearSearchText() {
             this.searchText = "";
-        }
+        },
+        /**
+         * Update the MonitorList Filter
+         * @param {object} newFilter Object with new filter
+         */
+        updateFilter(newFilter) {
+            this.filterState = newFilter;
+        },
+        /**
+         * Deselect a monitor
+         * @param {number} id ID of monitor
+         */
+        deselect(id) {
+            delete this.selectedMonitors[id];
+        },
+        /**
+         * Select a monitor
+         * @param {number} id ID of monitor
+         */
+        select(id) {
+            this.selectedMonitors[id] = true;
+        },
+        /**
+         * Determine if monitor is selected
+         * @param {number} id ID of monitor
+         * @returns {bool}
+         */
+        isSelected(id) {
+            return id in this.selectedMonitors;
+        },
+        /** Disable select mode and reset selection */
+        cancelSelectMode() {
+            this.selectMode = false;
+            this.selectedMonitors = {};
+        },
+        /** Show dialog to confirm pause */
+        pauseDialog() {
+            this.$refs.confirmPause.show();
+        },
+        /** Pause each selected monitor */
+        pauseSelected() {
+            Object.keys(this.selectedMonitors)
+                .filter(id => this.$root.monitorList[id].active)
+                .forEach(id => this.$root.getSocket().emit("pauseMonitor", id));
+
+            this.cancelSelectMode();
+        },
+        /** Resume each selected monitor */
+        resumeSelected() {
+            Object.keys(this.selectedMonitors)
+                .filter(id => !this.$root.monitorList[id].active)
+                .forEach(id => this.$root.getSocket().emit("resumeMonitor", id));
+
+            this.cancelSelectMode();
+        },
     },
 };
 </script>
@@ -159,13 +340,22 @@ export default {
     margin: -10px;
     margin-bottom: 10px;
     padding: 10px;
-    display: flex;
-    justify-content: space-between;
 
     .dark & {
         background-color: $dark-header-bg;
         border-bottom: 0;
     }
+}
+
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-filter {
+    display: flex;
+    align-items: center;
 }
 
 @media (max-width: 770px) {
@@ -215,6 +405,13 @@ export default {
 .bottom-style {
     padding-left: 67px;
     margin-top: 5px;
+}
+
+.selection-controls {
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 </style>

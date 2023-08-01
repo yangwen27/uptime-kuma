@@ -4,6 +4,7 @@ import jwtDecode from "jwt-decode";
 import Favico from "favico.js";
 import dayjs from "dayjs";
 import { DOWN, MAINTENANCE, PENDING, UP } from "../util.ts";
+import { getDevContainerServerHostname, isDevContainer } from "../util-frontend.js";
 const toast = useToast();
 
 let socket;
@@ -56,7 +57,8 @@ export default {
                 message: "",
                 errorMessage: "",
                 currentPassword: "",
-            }
+            },
+            faviconUpdateDebounce: null,
         };
     },
 
@@ -93,7 +95,9 @@ export default {
 
             let wsHost;
             const env = process.env.NODE_ENV || "production";
-            if (env === "development" || localStorage.dev === "dev") {
+            if (env === "development" && isDevContainer()) {
+                wsHost = protocol + getDevContainerServerHostname();
+            } else if (env === "development" || localStorage.dev === "dev") {
                 wsHost = protocol + location.hostname + ":3001";
             } else {
                 wsHost = protocol + location.host;
@@ -693,9 +697,11 @@ export default {
 
         stats() {
             let result = {
+                active: 0,
                 up: 0,
                 down: 0,
                 maintenance: 0,
+                pending: 0,
                 unknown: 0,
                 pause: 0,
             };
@@ -707,12 +713,13 @@ export default {
                 if (monitor && ! monitor.active) {
                     result.pause++;
                 } else if (beat) {
+                    result.active++;
                     if (beat.status === UP) {
                         result.up++;
                     } else if (beat.status === DOWN) {
                         result.down++;
                     } else if (beat.status === PENDING) {
-                        result.up++;
+                        result.pending++;
                     } else if (beat.status === MAINTENANCE) {
                         result.maintenance++;
                     } else {
@@ -754,7 +761,12 @@ export default {
         // Update Badge
         "stats.down"(to, from) {
             if (to !== from) {
-                favicon.badge(to);
+                if (this.faviconUpdateDebounce != null) {
+                    clearTimeout(this.faviconUpdateDebounce);
+                }
+                this.faviconUpdateDebounce = setTimeout(() => {
+                    favicon.badge(to);
+                }, 1000);
             }
         },
 

@@ -6,6 +6,7 @@ const AliyunSms = require("./notification-providers/aliyun-sms");
 const Apprise = require("./notification-providers/apprise");
 const Bark = require("./notification-providers/bark");
 const ClickSendSMS = require("./notification-providers/clicksendsms");
+const SMSC = require("./notification-providers/smsc");
 const DingDing = require("./notification-providers/dingding");
 const Discord = require("./notification-providers/discord");
 const Feishu = require("./notification-providers/feishu");
@@ -20,11 +21,13 @@ const LineNotify = require("./notification-providers/linenotify");
 const LunaSea = require("./notification-providers/lunasea");
 const Matrix = require("./notification-providers/matrix");
 const Mattermost = require("./notification-providers/mattermost");
+const Nostr = require("./notification-providers/nostr");
 const Ntfy = require("./notification-providers/ntfy");
 const Octopush = require("./notification-providers/octopush");
 const OneBot = require("./notification-providers/onebot");
 const Opsgenie = require("./notification-providers/opsgenie");
 const PagerDuty = require("./notification-providers/pagerduty");
+const FlashDuty = require("./notification-providers/flashduty");
 const PagerTree = require("./notification-providers/pagertree");
 const PromoSMS = require("./notification-providers/promosms");
 const Pushbullet = require("./notification-providers/pushbullet");
@@ -68,6 +71,7 @@ class Notification {
             new Apprise(),
             new Bark(),
             new ClickSendSMS(),
+            new SMSC(),
             new DingDing(),
             new Discord(),
             new Feishu(),
@@ -82,11 +86,13 @@ class Notification {
             new LunaSea(),
             new Matrix(),
             new Mattermost(),
+            new Nostr(),
             new Ntfy(),
             new Octopush(),
             new OneBot(),
             new Opsgenie(),
             new PagerDuty(),
+            new FlashDuty(),
             new PagerTree(),
             new PromoSMS(),
             new Pushbullet(),
@@ -113,7 +119,6 @@ class Notification {
             new GoAlert(),
             new ZohoCliq()
         ];
-
         for (let item of list) {
             if (! item.name) {
                 throw new Error("Notification provider without name");
